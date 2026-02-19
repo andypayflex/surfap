@@ -12,6 +12,8 @@ interface BreakCondition {
   breakName: string;
   region: string;
   breakType: string;
+  latitude: number;
+  longitude: number;
   qualityScore: number;
   qualityLabel: string;
   waveHeightFt: number;
@@ -24,6 +26,16 @@ interface BreakCondition {
   tideHeightFt: number | null;
   tideState: string | null;
   fetchedAt: string;
+}
+
+const NEARBY_RADIUS_KM = 100;
+
+function haversineDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 function degreesToCompass(deg: number): string {
@@ -99,6 +111,9 @@ export default function DashboardPage() {
   const [conditions, setConditions] = useState<BreakCondition[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationLoading, setLocationLoading] = useState(true);
+  const [nearbyOnly, setNearbyOnly] = useState(true);
 
   useEffect(() => {
     async function fetchConditions() {
@@ -114,6 +129,23 @@ export default function DashboardPage() {
       setLoading(false);
     }
     fetchConditions();
+  }, []);
+
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setLocationLoading(false);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setLocationLoading(false);
+      },
+      () => {
+        setLocationLoading(false);
+      },
+      { timeout: 10000 }
+    );
   }, []);
 
   if (loading) {
@@ -142,7 +174,7 @@ export default function DashboardPage() {
             </span>
           </h1>
           <p className="text-zinc-400 text-sm">
-            All breaks ranked by current conditions
+            {userLocation && nearbyOnly ? "Nearby breaks" : "All breaks"} ranked by current conditions
           </p>
           {lastUpdated && (
             <p className="text-xs text-zinc-600 mt-1">
@@ -151,33 +183,47 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Search */}
+        {/* Search and filter */}
         {conditions.length > 0 && (
-          <div className="relative mb-6">
-            <svg
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-              stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-            </svg>
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name, region, or type..."
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-10 pr-4 py-2.5 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-cyan-800 focus:ring-1 focus:ring-cyan-800/50 transition-colors"
-            />
-            {search && (
-              <button
-                onClick={() => setSearch("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors"
+          <div className="flex gap-2 mb-6">
+            <div className="relative flex-1">
+              <svg
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={2}
+                stroke="currentColor"
               >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+              </svg>
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by name, region, or type..."
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-10 pr-4 py-2.5 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-cyan-800 focus:ring-1 focus:ring-cyan-800/50 transition-colors"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+            {userLocation && (
+              <button
+                onClick={() => setNearbyOnly(!nearbyOnly)}
+                className={`flex-shrink-0 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                  nearbyOnly
+                    ? "bg-cyan-500/10 border-cyan-500/30 text-cyan-400"
+                    : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-zinc-700"
+                }`}
+              >
+                {nearbyOnly ? "Nearby" : "All Breaks"}
               </button>
             )}
           </div>
@@ -192,14 +238,35 @@ export default function DashboardPage() {
         ) : (
           <div className="space-y-4">
             {(() => {
+              // Compute distances if user location is available
+              const withDistance = conditions.map((c) => ({
+                ...c,
+                distanceKm: userLocation
+                  ? haversineDistanceKm(userLocation.lat, userLocation.lng, c.latitude, c.longitude)
+                  : null,
+              }));
+
+              // Apply nearby filter
+              let pool = withDistance;
+              let autoExpanded = false;
+              if (userLocation && nearbyOnly) {
+                const nearby = pool.filter((c) => c.distanceKm! <= NEARBY_RADIUS_KM);
+                if (nearby.length > 0) {
+                  pool = nearby;
+                } else {
+                  autoExpanded = true;
+                }
+              }
+
+              // Apply search filter
               const q = search.toLowerCase().trim();
               const filtered = q
-                ? conditions.filter((c) =>
+                ? pool.filter((c) =>
                     c.breakName.toLowerCase().includes(q) ||
                     c.region.toLowerCase().includes(q) ||
                     c.breakType.toLowerCase().includes(q)
                   )
-                : conditions;
+                : pool;
 
               if (filtered.length === 0) {
                 return (
@@ -209,7 +276,14 @@ export default function DashboardPage() {
                 );
               }
 
-              return filtered.map((cond, i) => {
+              return (
+                <>
+                  {autoExpanded && (
+                    <p className="text-xs text-zinc-500 text-center mb-2">
+                      No breaks within {Math.round(NEARBY_RADIUS_KM * 0.621)} mi — showing all breaks
+                    </p>
+                  )}
+                  {filtered.map((cond, i) => {
               const isEpic = cond.qualityLabel === "Epic";
               return (
                 <motion.div
@@ -247,6 +321,11 @@ export default function DashboardPage() {
                           >
                             {cond.qualityLabel}
                           </Badge>
+                          {cond.distanceKm !== null && (
+                            <span className="text-xs text-zinc-500 flex-shrink-0">
+                              {Math.round(cond.distanceKm * 0.621)} mi away
+                            </span>
+                          )}
                         </div>
 
                         {/* Conditions grid */}
@@ -296,7 +375,9 @@ export default function DashboardPage() {
                   </Link>
                 </motion.div>
               );
-            });
+            })}
+                </>
+              );
             })()}
           </div>
         )}
