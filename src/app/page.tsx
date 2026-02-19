@@ -312,20 +312,22 @@ export default function DashboardPage() {
 
                       {/* Info */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-semibold text-lg text-zinc-100 truncate">
-                            {cond.breakName}
-                          </h3>
-                          <Badge
-                            className={`text-xs border ${getLabelBg(cond.qualityLabel)}`}
-                          >
-                            {cond.qualityLabel}
-                          </Badge>
-                          {cond.distanceKm !== null && (
-                            <span className="text-xs text-zinc-500 flex-shrink-0">
-                              {Math.round(cond.distanceKm * 0.621)} mi away
-                            </span>
-                          )}
+                        <div className="mb-1">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <h3 className="font-semibold text-lg text-zinc-100">
+                              {cond.breakName}
+                            </h3>
+                            <Badge
+                              className={`text-xs border flex-shrink-0 ${getLabelBg(cond.qualityLabel)}`}
+                            >
+                              {cond.qualityLabel}
+                            </Badge>
+                            {cond.distanceKm !== null && (
+                              <span className="text-xs text-zinc-500 flex-shrink-0">
+                                {Math.round(cond.distanceKm * 0.621)} mi away
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         {/* Conditions grid */}
