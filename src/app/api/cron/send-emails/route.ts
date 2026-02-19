@@ -12,7 +12,15 @@ export const maxDuration = 300; // 5 min max for Vercel
 const MAX_EMAILS_PER_RUN = 100; // Resend free tier: 100/day
 const BASE_URL = process.env.BASE_URL ?? 'http://localhost:3000';
 
+export async function GET(req: NextRequest) {
+  return handleSendEmails(req);
+}
+
 export async function POST(req: NextRequest) {
+  return handleSendEmails(req);
+}
+
+async function handleSendEmails(req: NextRequest) {
   // Verify cron secret
   const authHeader = req.headers.get('authorization');
   if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {

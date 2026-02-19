@@ -10,7 +10,15 @@ import { nanoid } from 'nanoid';
 
 export const dynamic = 'force-dynamic';
 
+export async function GET(req: NextRequest) {
+  return handleFetchConditions(req);
+}
+
 export async function POST(req: NextRequest) {
+  return handleFetchConditions(req);
+}
+
+async function handleFetchConditions(req: NextRequest) {
   // Verify cron secret
   const authHeader = req.headers.get('authorization');
   if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
