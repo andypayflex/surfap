@@ -27,6 +27,7 @@ export const breaks = sqliteTable('breaks', {
   nearestTideStation: text('nearest_tide_station'),
   nearestBuoyStation: text('nearest_buoy_station'),
   exposureFactor: real('exposure_factor').notNull().default(0.7),
+  webcamUrl: text('webcam_url'),
 });
 
 export const userBreaks = sqliteTable('user_breaks', {

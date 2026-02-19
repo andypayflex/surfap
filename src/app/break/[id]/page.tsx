@@ -33,6 +33,7 @@ interface BreakDetail {
   tideHeightFt: number | null;
   tideState: string | null;
   fetchedAt: string;
+  webcamUrl: string | null;
 }
 
 interface Photo {
@@ -41,6 +42,24 @@ interface Photo {
   photographer: string;
   photographerUrl: string;
   unsplashUrl: string;
+}
+
+function getYouTubeEmbedUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    let videoId: string | null = null;
+    if (parsed.hostname.includes("youtube.com")) {
+      videoId = parsed.searchParams.get("v") || parsed.pathname.split("/").pop() || null;
+    } else if (parsed.hostname === "youtu.be") {
+      videoId = parsed.pathname.slice(1);
+    }
+    if (videoId) return `https://www.youtube.com/embed/${videoId}?autoplay=0&mute=1`;
+    // Fallback: if it's already an embed URL or live stream URL, return as-is
+    if (url.includes("youtube.com/embed")) return url;
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 function degreesToCompass(deg: number): string {
@@ -301,6 +320,33 @@ export default function BreakDetailPage() {
             </div>
           </CardSpotlight>
         </motion.div>
+
+        {/* Surf Cam */}
+        {breakData.webcamUrl && (() => {
+          const embedUrl = getYouTubeEmbedUrl(breakData.webcamUrl);
+          if (!embedUrl) return null;
+          return (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.25 }}
+              className="mb-6"
+            >
+              <CardSpotlight color="rgba(14, 116, 144, 0.06)">
+                <h2 className="text-sm uppercase tracking-wider text-zinc-500 mb-4">Surf Cam</h2>
+                <div className="rounded-lg overflow-hidden aspect-video">
+                  <iframe
+                    className="w-full h-full border-0"
+                    src={embedUrl}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    loading="lazy"
+                  />
+                </div>
+              </CardSpotlight>
+            </motion.div>
+          );
+        })()}
 
         {/* Break info */}
         <motion.div

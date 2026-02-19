@@ -24,6 +24,7 @@ export async function GET(
         optimalWindDir: breaks.optimalWindDir,
         optimalTideLow: breaks.optimalTideLow,
         optimalTideHigh: breaks.optimalTideHigh,
+        webcamUrl: breaks.webcamUrl,
         qualityScore: conditions.qualityScore,
         qualityLabel: conditions.qualityLabel,
         waveHeightFt: conditions.waveHeightFt,
@@ -73,6 +74,7 @@ export async function GET(
       tideHeightFt: r.tideHeightFt,
       tideState: r.tideState,
       fetchedAt: r.fetchedAt ?? "",
+      webcamUrl: r.webcamUrl,
     });
   } catch (err) {
     console.error("Break detail fetch error:", err);
