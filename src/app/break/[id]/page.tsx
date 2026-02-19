@@ -6,7 +6,7 @@ import Link from "next/link";
 import { CardSpotlight } from "@/components/ui/card-spotlight";
 import { Sparkles } from "@/components/ui/sparkles";
 import { Badge } from "@/components/ui/badge";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface BreakDetail {
   breakId: string;
@@ -161,6 +161,7 @@ export default function BreakDetailPage() {
   const [breakData, setBreakData] = useState<BreakDetail | null>(null);
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedForecast, setSelectedForecast] = useState<string | null>(null);
 
   useEffect(() => {
     if (!params.id) return;
@@ -359,7 +360,12 @@ export default function BreakDetailPage() {
                 {breakData.forecast.map((day) => (
                   <div
                     key={day.forecastDate}
-                    className="flex-shrink-0 flex flex-col items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-3 min-w-[90px]"
+                    onClick={() => setSelectedForecast(selectedForecast === day.forecastDate ? null : day.forecastDate)}
+                    className={`flex-shrink-0 flex flex-col items-center gap-2 rounded-lg border px-4 py-3 min-w-[90px] cursor-pointer transition-colors ${
+                      selectedForecast === day.forecastDate
+                        ? "border-cyan-500/50 bg-cyan-950/20"
+                        : "border-zinc-800 bg-zinc-900/50 hover:border-zinc-700"
+                    }`}
                   >
                     <span className="text-xs font-medium text-zinc-300">{formatDayName(day.forecastDate)}</span>
                     <span className="text-[10px] text-zinc-600">{formatDayDate(day.forecastDate)}</span>
@@ -374,6 +380,66 @@ export default function BreakDetailPage() {
                   </div>
                 ))}
               </div>
+
+              <AnimatePresence>
+                {selectedForecast && (() => {
+                  const day = breakData.forecast.find((d) => d.forecastDate === selectedForecast);
+                  if (!day) return null;
+                  return (
+                    <motion.div
+                      key={day.forecastDate}
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2, ease: "easeInOut" }}
+                      className="overflow-hidden"
+                    >
+                      <div className="pt-4 mt-4 border-t border-zinc-800">
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="text-xs font-medium text-zinc-400">
+                            {formatDayName(day.forecastDate)}, {formatDayDate(day.forecastDate)}
+                          </span>
+                          <Badge className={`text-[10px] border ${getLabelBg(day.qualityLabel)}`}>
+                            {day.qualityLabel} &middot; {day.qualityScore}
+                          </Badge>
+                        </div>
+                        <div className="grid grid-cols-3 sm:grid-cols-5 gap-x-4 gap-y-3">
+                          <div>
+                            <span className="text-[10px] uppercase tracking-wider text-zinc-600 block">Swell</span>
+                            <span className="text-sm font-medium text-zinc-300">
+                              {day.swellHeightFt.toFixed(1)} ft
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] uppercase tracking-wider text-cyan-700 block">Face</span>
+                            <span className="text-sm font-bold text-cyan-300">
+                              {day.faceHeightFt.toFixed(1)} ft
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] uppercase tracking-wider text-zinc-600 block">Period</span>
+                            <span className="text-sm font-medium text-zinc-300">
+                              {day.swellPeriodS.toFixed(0)}s {degreesToCompass(day.swellDirectionDeg)}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] uppercase tracking-wider text-zinc-600 block">Wind</span>
+                            <span className="text-sm font-medium text-zinc-300">
+                              {day.windSpeedMph.toFixed(0)} mph {degreesToCompass(day.windDirectionDeg)}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] uppercase tracking-wider text-zinc-600 block">Tide</span>
+                            <span className="text-sm font-medium text-zinc-300">
+                              {day.tideHeightFt !== null ? `${day.tideHeightFt.toFixed(1)} ft` : "—"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })()}
+              </AnimatePresence>
             </CardSpotlight>
           </motion.div>
         )}
