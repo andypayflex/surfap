@@ -9,7 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@libsql/client": "^0.17.0",
+    "@neondatabase/serverless": "^1.0.2",
     "@react-email/components": "^1.0.8",
     "@tsparticles/react": "^3.0.0",
     "@tsparticles/slim": "^3.9.1",

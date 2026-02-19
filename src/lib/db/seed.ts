@@ -1,14 +1,10 @@
-import { drizzle } from 'drizzle-orm/libsql';
-import { createClient } from '@libsql/client';
+import { neon } from '@neondatabase/serverless';
+import { drizzle } from 'drizzle-orm/neon-http';
 import { breaks, conditions, userBreaks } from './schema';
 import { nanoid } from 'nanoid';
 import { sql } from 'drizzle-orm';
 
-const client = createClient({
-  url: process.env.TURSO_DATABASE_URL ?? 'file:local.db',
-  authToken: process.env.TURSO_AUTH_TOKEN,
-});
-
+const client = neon(process.env.DATABASE_URL!);
 const db = drizzle(client);
 
 // Southern California surf breaks with accurate metadata
