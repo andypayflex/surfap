@@ -234,11 +234,11 @@ export default function BreakDetailPage() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-3xl md:text-4xl font-bold text-zinc-100">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-1">
+            <h1 className="text-3xl md:text-4xl font-bold text-zinc-100 min-w-0 break-words">
               {breakData.breakName}
             </h1>
-            <Badge className={`text-sm border ${getLabelBg(breakData.qualityLabel)}`}>
+            <Badge className={`text-sm border flex-shrink-0 ${getLabelBg(breakData.qualityLabel)}`}>
               {breakData.qualityLabel}
             </Badge>
           </div>
