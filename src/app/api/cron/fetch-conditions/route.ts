@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { breaks, conditions } from '@/lib/db/schema';
-import { fetchMarineConditions } from '@/lib/sources/open-meteo';
-import { fetchTideConditions } from '@/lib/sources/noaa-tides';
+import { breaks, conditions, forecasts } from '@/lib/db/schema';
+import { fetchMarineForecast } from '@/lib/sources/open-meteo';
+import { fetchTideConditions, fetchTideForecastDays } from '@/lib/sources/noaa-tides';
 import { fetchBuoyData } from '@/lib/sources/noaa-buoy';
 import { calculateScore, getQualityLabel } from '@/lib/scoring';
 import { eq } from 'drizzle-orm';
@@ -31,6 +31,7 @@ async function handleFetchConditions(req: NextRequest) {
   console.log(`Fetching conditions for ${allBreaks.length} breaks...`);
 
   let successCount = 0;
+  let forecastCount = 0;
   let errorCount = 0;
 
   // Process breaks in batches of 5 to avoid hammering APIs
@@ -41,79 +42,123 @@ async function handleFetchConditions(req: NextRequest) {
     await Promise.all(
       batch.map(async (brk) => {
         try {
-          // Fetch marine conditions (required)
-          const marine = await fetchMarineConditions(brk.latitude, brk.longitude);
-          if (!marine) {
-            console.error(`No marine data for ${brk.name}`);
+          // Fetch 7-day marine forecast (replaces single-day fetch)
+          const forecastDays = await fetchMarineForecast(brk.latitude, brk.longitude, 7);
+          if (!forecastDays || forecastDays.length === 0) {
+            console.error(`No marine forecast data for ${brk.name}`);
             errorCount++;
             return;
           }
 
-          // Fetch tide conditions (best effort)
-          const tide = brk.nearestTideStation
-            ? await fetchTideConditions(brk.nearestTideStation)
-            : null;
-
-          // Fetch buoy data (optional enrichment)
+          // Fetch buoy data for today only (real-time only)
           const buoy = brk.nearestBuoyStation
             ? await fetchBuoyData(brk.nearestBuoyStation)
             : null;
 
-          // Use buoy data to supplement/override forecast when available
-          const waveHeightFt = buoy && buoy.waveHeightFt > 0
-            ? buoy.waveHeightFt
-            : marine.waveHeightFt;
-          const swellPeriodS = buoy && buoy.dominantPeriodS > 0
-            ? buoy.dominantPeriodS
-            : marine.swellPeriodS;
-          const windSpeedMph = buoy && buoy.windSpeedMph > 0
-            ? buoy.windSpeedMph
-            : marine.windSpeedMph;
-          const windDirectionDeg = buoy && buoy.windDirectionDeg > 0
-            ? buoy.windDirectionDeg
-            : marine.windDirectionDeg;
+          // Fetch tide forecast for the full range
+          const today = new Date();
+          const endDate = new Date();
+          endDate.setDate(today.getDate() + 6);
+          const tideForecast = brk.nearestTideStation
+            ? await fetchTideForecastDays(brk.nearestTideStation, today, endDate)
+            : null;
 
-          // Swell height from Open-Meteo (or buoy if available)
-          const swellHeightFt = buoy && buoy.waveHeightFt > 0
-            ? buoy.waveHeightFt
-            : marine.swellHeightFt;
+          // Also fetch current tide for today's conditions
+          const todayTide = brk.nearestTideStation
+            ? await fetchTideConditions(brk.nearestTideStation)
+            : null;
 
-          // Face height = swell height * exposure factor for this break
+          const now = new Date().toISOString();
+          const todayDate = forecastDays[0].date;
+
+          // --- Day 0: Update current conditions (same logic as before) ---
+          const day0 = forecastDays[0];
+
+          // Use buoy to supplement today's data
+          const waveHeightFt = buoy && buoy.waveHeightFt > 0 ? buoy.waveHeightFt : day0.waveHeightFt;
+          const swellPeriodS = buoy && buoy.dominantPeriodS > 0 ? buoy.dominantPeriodS : day0.swellPeriodS;
+          const windSpeedMph = buoy && buoy.windSpeedMph > 0 ? buoy.windSpeedMph : day0.windSpeedMph;
+          const windDirectionDeg = buoy && buoy.windDirectionDeg > 0 ? buoy.windDirectionDeg : day0.windDirectionDeg;
+          const swellHeightFt = buoy && buoy.waveHeightFt > 0 ? buoy.waveHeightFt : day0.swellHeightFt;
           const faceHeightFt = swellHeightFt * (brk.exposureFactor ?? 0.7);
 
           const conditionsInput = {
-            waveHeightFt: faceHeightFt, // scoring uses estimated face height
+            waveHeightFt: faceHeightFt,
             swellPeriodS,
-            swellDirectionDeg: marine.swellDirectionDeg,
+            swellDirectionDeg: day0.swellDirectionDeg,
             windSpeedMph,
             windDirectionDeg,
-            tideHeightFt: tide?.tideHeightFt ?? null,
+            tideHeightFt: todayTide?.tideHeightFt ?? null,
           };
 
           const score = calculateScore(brk, conditionsInput);
           const label = getQualityLabel(score);
-          const now = new Date().toISOString();
 
-          // Delete existing condition for this break, then insert new one
           await db.delete(conditions).where(eq(conditions.breakId, brk.id));
           await db.insert(conditions).values({
             id: nanoid(),
             breakId: brk.id,
             fetchedAt: now,
-            waveHeightFt: waveHeightFt,
-            swellHeightFt: swellHeightFt,
-            faceHeightFt: faceHeightFt,
+            waveHeightFt,
+            swellHeightFt,
+            faceHeightFt,
             swellPeriodS: conditionsInput.swellPeriodS,
             swellDirectionDeg: conditionsInput.swellDirectionDeg,
             windSpeedMph: conditionsInput.windSpeedMph,
             windDirectionDeg: conditionsInput.windDirectionDeg,
             tideHeightFt: conditionsInput.tideHeightFt,
-            tideState: tide?.tideState ?? null,
+            tideState: todayTide?.tideState ?? null,
             qualityScore: score,
             qualityLabel: label,
           });
 
           successCount++;
+
+          // --- Days 1-6: Store forecasts ---
+          await db.delete(forecasts).where(eq(forecasts.breakId, brk.id));
+
+          const forecastRows = forecastDays
+            .filter((day) => day.date !== todayDate)
+            .map((day) => {
+              const daySwellHeight = day.swellHeightFt;
+              const dayFaceHeight = daySwellHeight * (brk.exposureFactor ?? 0.7);
+              const dayTide = tideForecast?.get(day.date) ?? null;
+
+              const dayConditions = {
+                waveHeightFt: dayFaceHeight,
+                swellPeriodS: day.swellPeriodS,
+                swellDirectionDeg: day.swellDirectionDeg,
+                windSpeedMph: day.windSpeedMph,
+                windDirectionDeg: day.windDirectionDeg,
+                tideHeightFt: dayTide?.tideHeightFt ?? null,
+              };
+
+              const dayScore = calculateScore(brk, dayConditions);
+              const dayLabel = getQualityLabel(dayScore);
+
+              return {
+                id: nanoid(),
+                breakId: brk.id,
+                forecastDate: day.date,
+                fetchedAt: now,
+                waveHeightFt: day.waveHeightFt,
+                swellHeightFt: daySwellHeight,
+                faceHeightFt: dayFaceHeight,
+                swellPeriodS: day.swellPeriodS,
+                swellDirectionDeg: day.swellDirectionDeg,
+                windSpeedMph: day.windSpeedMph,
+                windDirectionDeg: day.windDirectionDeg,
+                tideHeightFt: dayTide?.tideHeightFt ?? null,
+                tideState: dayTide?.tideState ?? null,
+                qualityScore: dayScore,
+                qualityLabel: dayLabel,
+              };
+            });
+
+          if (forecastRows.length > 0) {
+            await db.insert(forecasts).values(forecastRows);
+            forecastCount += forecastRows.length;
+          }
         } catch (err) {
           console.error(`Error processing ${brk.name}:`, err);
           errorCount++;
@@ -124,11 +169,12 @@ async function handleFetchConditions(req: NextRequest) {
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
-  console.log(`Fetch conditions complete: ${successCount} success, ${errorCount} errors in ${elapsed}s`);
+  console.log(`Fetch conditions complete: ${successCount} success, ${forecastCount} forecasts, ${errorCount} errors in ${elapsed}s`);
 
   return NextResponse.json({
     success: true,
     processed: successCount,
+    forecasts: forecastCount,
     errors: errorCount,
     elapsedSeconds: parseFloat(elapsed),
   });

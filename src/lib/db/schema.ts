@@ -53,3 +53,21 @@ export const conditions = pgTable('conditions', {
   qualityScore: integer('quality_score'),
   qualityLabel: text('quality_label'),
 });
+
+export const forecasts = pgTable('forecasts', {
+  id: text('id').primaryKey(),
+  breakId: text('break_id').notNull().references(() => breaks.id),
+  forecastDate: text('forecast_date').notNull(),
+  fetchedAt: text('fetched_at').notNull(),
+  waveHeightFt: doublePrecision('wave_height_ft'),
+  swellHeightFt: doublePrecision('swell_height_ft'),
+  faceHeightFt: doublePrecision('face_height_ft'),
+  swellPeriodS: doublePrecision('swell_period_s'),
+  swellDirectionDeg: integer('swell_direction_deg'),
+  windSpeedMph: doublePrecision('wind_speed_mph'),
+  windDirectionDeg: integer('wind_direction_deg'),
+  tideHeightFt: doublePrecision('tide_height_ft'),
+  tideState: text('tide_state', { enum: ['rising', 'falling', 'high', 'low'] }),
+  qualityScore: integer('quality_score'),
+  qualityLabel: text('quality_label'),
+});

@@ -34,6 +34,20 @@ interface BreakDetail {
   tideState: string | null;
   fetchedAt: string;
   webcamUrl: string | null;
+  forecast: ForecastDay[];
+}
+
+interface ForecastDay {
+  forecastDate: string;
+  qualityScore: number;
+  qualityLabel: string;
+  faceHeightFt: number;
+  swellHeightFt: number;
+  swellPeriodS: number;
+  swellDirectionDeg: number;
+  windSpeedMph: number;
+  windDirectionDeg: number;
+  tideHeightFt: number | null;
 }
 
 interface Photo {
@@ -89,9 +103,19 @@ function getLabelBg(label: string): string {
   }
 }
 
-function ScoreRing({ score, label, size = "md" }: { score: number; label: string; size?: "md" | "lg" }) {
-  const radius = size === "lg" ? 40 : 28;
-  const dim = size === "lg" ? 96 : 64;
+function formatDayName(dateStr: string): string {
+  const date = new Date(dateStr + "T12:00:00");
+  return date.toLocaleDateString("en-US", { weekday: "short" });
+}
+
+function formatDayDate(dateStr: string): string {
+  const date = new Date(dateStr + "T12:00:00");
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function ScoreRing({ score, label, size = "md" }: { score: number; label: string; size?: "sm" | "md" | "lg" }) {
+  const radius = size === "lg" ? 40 : size === "sm" ? 20 : 28;
+  const dim = size === "lg" ? 96 : size === "sm" ? 48 : 64;
   const circumference = 2 * Math.PI * radius;
   const progress = (score / 100) * circumference;
 
@@ -320,6 +344,39 @@ export default function BreakDetailPage() {
             </div>
           </CardSpotlight>
         </motion.div>
+
+        {/* 6-Day Forecast */}
+        {breakData.forecast && breakData.forecast.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.25 }}
+            className="mb-6"
+          >
+            <CardSpotlight color="rgba(14, 116, 144, 0.06)">
+              <h2 className="text-sm uppercase tracking-wider text-zinc-500 mb-4">6-Day Forecast</h2>
+              <div className="flex gap-3 overflow-x-auto pb-2">
+                {breakData.forecast.map((day) => (
+                  <div
+                    key={day.forecastDate}
+                    className="flex-shrink-0 flex flex-col items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-3 min-w-[90px]"
+                  >
+                    <span className="text-xs font-medium text-zinc-300">{formatDayName(day.forecastDate)}</span>
+                    <span className="text-[10px] text-zinc-600">{formatDayDate(day.forecastDate)}</span>
+                    <ScoreRing score={day.qualityScore} label={day.qualityLabel} size="sm" />
+                    <span className="text-sm font-bold text-cyan-300">{day.faceHeightFt.toFixed(1)} ft</span>
+                    <Badge className={`text-[10px] border ${getLabelBg(day.qualityLabel)}`}>
+                      {day.qualityLabel}
+                    </Badge>
+                    <span className="text-[10px] text-zinc-500">
+                      {day.windSpeedMph.toFixed(0)} mph {degreesToCompass(day.windDirectionDeg)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </CardSpotlight>
+          </motion.div>
+        )}
 
         {/* Surf Cam */}
         {breakData.webcamUrl && (() => {

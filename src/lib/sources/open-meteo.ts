@@ -39,6 +39,91 @@ interface OpenMeteoForecastResponse {
  * Fetch current marine conditions for a lat/lng from Open-Meteo.
  * Returns the data for the current hour (or nearest available).
  */
+export interface MarineForecastDay {
+  date: string; // "2026-02-20"
+  waveHeightFt: number;
+  swellHeightFt: number;
+  swellPeriodS: number;
+  swellDirectionDeg: number;
+  windWaveHeightFt: number;
+  windSpeedMph: number;
+  windDirectionDeg: number;
+}
+
+/**
+ * Fetch multi-day marine forecast for a lat/lng.
+ * Groups hourly data by date and picks 7 AM local hour as representative.
+ * Returns array of MarineForecastDay (one per day, including today).
+ */
+export async function fetchMarineForecast(
+  latitude: number,
+  longitude: number,
+  days: number = 7,
+): Promise<MarineForecastDay[] | null> {
+  try {
+    const [marineRes, forecastRes] = await Promise.all([
+      fetch(
+        `https://marine-api.open-meteo.com/v1/marine?latitude=${latitude}&longitude=${longitude}` +
+        `&hourly=wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period,swell_wave_direction,wind_wave_height` +
+        `&timezone=auto&forecast_days=${days}`,
+      ),
+      fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}` +
+        `&hourly=wind_speed_10m,wind_direction_10m` +
+        `&timezone=auto&forecast_days=${days}`,
+      ),
+    ]);
+
+    if (!marineRes.ok || !forecastRes.ok) {
+      console.error(`Open-Meteo forecast API error: marine=${marineRes.status} forecast=${forecastRes.status}`);
+      return null;
+    }
+
+    const marine: OpenMeteoMarineResponse = await marineRes.json();
+    const forecast: OpenMeteoForecastResponse = await forecastRes.json();
+
+    // Group by date, pick 7 AM (index "T07") as representative hour
+    const dayMap = new Map<string, number>();
+    for (let i = 0; i < marine.hourly.time.length; i++) {
+      const t = marine.hourly.time[i]; // "2026-02-20T07:00"
+      if (t.includes('T07:')) {
+        const date = t.split('T')[0];
+        dayMap.set(date, i);
+      }
+    }
+
+    const windMap = new Map<string, number>();
+    for (let i = 0; i < forecast.hourly.time.length; i++) {
+      const t = forecast.hourly.time[i];
+      if (t.includes('T07:')) {
+        const date = t.split('T')[0];
+        windMap.set(date, i);
+      }
+    }
+
+    const result: MarineForecastDay[] = [];
+    for (const [date, idx] of dayMap) {
+      const windIdx = windMap.get(date) ?? 0;
+      result.push({
+        date,
+        waveHeightFt: (marine.hourly.wave_height[idx] ?? 0) * METERS_TO_FEET,
+        swellHeightFt: (marine.hourly.swell_wave_height[idx] ?? 0) * METERS_TO_FEET,
+        swellPeriodS: marine.hourly.swell_wave_period[idx] ?? 0,
+        swellDirectionDeg: marine.hourly.swell_wave_direction[idx] ?? 0,
+        windWaveHeightFt: (marine.hourly.wind_wave_height[idx] ?? 0) * METERS_TO_FEET,
+        windSpeedMph: (forecast.hourly.wind_speed_10m[windIdx] ?? 0) * KMH_TO_MPH,
+        windDirectionDeg: forecast.hourly.wind_direction_10m[windIdx] ?? 0,
+      });
+    }
+
+    result.sort((a, b) => a.date.localeCompare(b.date));
+    return result;
+  } catch (err) {
+    console.error('Open-Meteo forecast fetch error:', err);
+    return null;
+  }
+}
+
 export async function fetchMarineConditions(
   latitude: number,
   longitude: number,
